@@ -37,18 +37,27 @@ trip, not a hard-coded `{"ok":true}`.
 
 ### Running with a real model
 
-The default answers without an API key (see [Answering](#answering-two-providers-and-a-mock)).
-For the real run:
+The default answers without an API key (see [Answering](#answering-three-routes-and-a-mock)).
+For the real run, pick a route and set its key in `.env`:
 
 ```bash
-# in .env
+# Through OpenRouter (a third-party AI gateway)
+LLM_PROVIDER=openrouter
+LLM_MODEL=anthropic/claude-opus-5
+OPENROUTER_API_KEY=sk-or-v1-...
+
+# …or straight at the vendor
 LLM_PROVIDER=anthropic
+LLM_MODEL=claude-opus-5
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-then `docker compose up -d --build app`. Selecting `anthropic` without a key **refuses to
-start** rather than silently falling back — an app that quietly stops using the model you
-configured, and answers differently because of it, is worse than one that will not boot.
+then `docker compose up -d --build app`. **That is the entire difference** — same prompt, same
+citation guard, same anonymizer, same audit record; only the model id namespace changes.
+
+Selecting a provider without its key **refuses to start** rather than silently falling back —
+an app that quietly stops using the model you configured, and answers differently because of
+it, is worse than one that will not boot.
 
 ---
 
@@ -82,9 +91,11 @@ a fresh `git clone` before this README was written.
    belonging to that subject, immediately. The other user's data is untouched, and signing
    back in re-seeds a fresh corpus.
 
-Two of these depend on the mock answerer picking particular sentences. With
-`LLM_PROVIDER=anthropic` the answers are better written, but the citations, the refusal and
-the redaction behave identically — those are enforced by the app, not by the model.
+Two of these depend on the mock answerer picking particular sentences. With a real model
+(`LLM_PROVIDER=openrouter` or `anthropic`) the answers are better written — item 4 comes back
+as *"You should contact David Kraus for the CAKE configuration on your router…"* rather than a
+lifted sentence — but the citations, the refusal and the redaction behave identically. Those
+are enforced by the app, not by the model.
 
 ---
 
@@ -113,20 +124,27 @@ the first.
 
 | Interface | Env var | Implementations |
 | --- | --- | --- |
-| `LlmProvider` | `LLM_PROVIDER` | `anthropic` · `gateway` · `mock` |
+| `LlmProvider` | `LLM_PROVIDER` | `anthropic` · `openrouter` · `gateway` · `mock` |
 | `EmbeddingProvider` | `EMBEDDING_PROVIDER` | `local` · `mock` |
 
 Nothing outside `src/server/ai/providers/` knows about HTTP, headers or vendor JSON. Model
 ids come from the environment, never from a call site.
 
-### Answering: two providers and a mock
+### Answering: three routes and a mock
 
-- **`anthropic`** — the real run, through the official SDK.
-- **`gateway`** — a corporate AI Gateway. This file is the evidence that the seam is real,
-  and what it shows is how small the swap is: a different base URL and a different auth
-  header (`Authorization: Bearer` rather than `x-api-key`, because a gateway authenticates
-  the *caller* against itself, not against the vendor). It shares its entire call path with
-  `anthropic`; only the client constructor differs.
+- **`anthropic`** — the vendor's API directly, through the official SDK.
+- **`openrouter`** — a **real, third-party AI gateway**, and the reason the seam is
+  demonstrated rather than asserted. OpenRouter is a different company, a different account,
+  a different billing relationship and a different model namespace, and reaching it required
+  no change to the prompt, the request, the parsing, the citation guard, the anonymizer or
+  the audit record. The provider file is nine lines of configuration. That is the same
+  argument a corporate AI Gateway would need, made against something that actually exists.
+- **`gateway`** — the generic form, for any other Anthropic-compatible gateway (LiteLLM,
+  Azure API Management and similar): you supply the base URL and the credential, and it
+  authenticates with `Authorization: Bearer` rather than `x-api-key`, because a gateway
+  authenticates the *caller* against itself, not against the vendor. It shares its entire
+  call path with `openrouter`, so the pattern is exercised even though this particular file
+  is configured rather than run.
 - **`mock`** — the default, so the app is fully demoable with no API key. It does **not**
   generate. It scores every sentence in the retrieved chunks against the question and
   returns the best few verbatim, citing the chunks they came from. Retrieval, the citation
@@ -169,8 +187,18 @@ from 0.44 to 0.51.
 
 | Role | Model | Version / id | Where it runs |
 | --- | --- | --- | --- |
-| Answering | Claude Opus 5 | `claude-opus-5` | Anthropic API (`@anthropic-ai/sdk` 0.120.0) |
+| Answering | Claude Opus 5 | `claude-opus-5` (vendor) / `anthropic/claude-opus-5` (OpenRouter) | Anthropic API or OpenRouter, via `@anthropic-ai/sdk` 0.120.0 |
+| Answering, as actually exercised | GPT-4o mini | `openai/gpt-4o-mini` | OpenRouter, via the same client |
 | Embedding | all-MiniLM-L6-v2 | `Xenova/all-MiniLM-L6-v2`, `q8` weights, 384 dims | in-process, in the container |
+
+The second row is the honest one, and it is worth a sentence. The live run of the answering
+path was made through OpenRouter against **an OpenAI model**, using the Anthropic SDK, with
+no change to the prompt, the request, the parsing, the citation guard, the anonymizer or the
+audit record — the audit row reads
+`provider=openrouter model=openai/gpt-4o-mini input_tokens=680 output_tokens=41 outcome=ok`.
+A vendor swap that crosses model *families* and still touches nothing outside
+`providers/openrouter.ts` is a stronger statement about the seam than a swap between two
+routes to the same model would have been.
 
 The `q8` (8-bit) weights are used rather than float32: 23 MB in the image instead of 96 MB,
 identical 384 dimensions, and measured separation held (related pair 0.339 vs unrelated
@@ -465,10 +493,11 @@ back to its default rather than failing validation on an empty string.
 | `EMBEDDING_PROVIDER` | `local` | `local` \| `mock` |
 | `EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Recorded on every chunk |
 | `EMBEDDING_CACHE_DIR` | `./.models` | Where the baked-in model lives |
-| `LLM_PROVIDER` | `mock` | `anthropic` \| `gateway` \| `mock` |
-| `LLM_MODEL` | `claude-opus-5` | Model id; never hard-coded at a call site |
+| `LLM_PROVIDER` | `mock` | `anthropic` \| `openrouter` \| `gateway` \| `mock` |
+| `LLM_MODEL` | `claude-opus-5` | Model id **in the selected provider's namespace**; never hard-coded at a call site |
 | `LLM_TIMEOUT_MS` | `60000` | Deadline for one call. The request is **aborted**, not abandoned |
 | `ANTHROPIC_API_KEY` | unset | Required when `LLM_PROVIDER=anthropic` |
+| `OPENROUTER_API_KEY` | unset | Required when `LLM_PROVIDER=openrouter` |
 | `LLM_GATEWAY_BASE_URL` / `LLM_GATEWAY_API_KEY` | unset | Required when `LLM_PROVIDER=gateway` |
 | `RAG_TOP_K` | `6` | Chunks put in front of the model |
 | `RAG_MIN_SCORE` | `0.25` | Similarity floor; below it, "Not found in your knowledge base." |
@@ -495,7 +524,7 @@ src/
     ai/
       types.ts            LlmProvider + EmbeddingProvider — the two seams
       call.ts             the ONLY door out of the process: timeout + audit
-      providers/          anthropic · gateway · mock   (answering)
+      providers/          anthropic · openrouter · gateway · mock  (answering)
       embedders/          local · mock                 (embedding)
     privacy/anonymizer.ts
     rag/                  chunk · extract · ingest · retrieve · answer · citations
@@ -528,15 +557,23 @@ either a test framework or reshaping the application's import style to suit a ru
 
 Written down rather than hidden. An honest gap scores; a half-finished feature does not.
 
-1. **The `anthropic` provider has never been run against the live API.** There was no key
-   available during the build, so it is verified by construction, typecheck, and a startup
-   check that refuses a keyless configuration. The wire format, the structured-output schema
-   and the token accounting are all from the current SDK, but *unexercised is unexercised*.
-   This is the single most important thing to run before trusting the numbers in this README.
-2. **The `gateway` provider is configured but never pointed at a real gateway.** It is written
-   against the common case, where the gateway is Anthropic-API-compatible (LiteLLM, Azure API
-   Management and similar all are). A proxy with its own wire format would be a different file
-   implementing the same interface — which is the point, but it is an untested point.
+1. **The `anthropic` provider has never been run against the live API.** There was no vendor
+   key available during the build. What *has* been run live is everything the two providers
+   share — `messages.ts`, the prompt, the JSON contract, the citation guard, the anonymizer
+   round trip and the audit record — exercised through `openrouter` against a real gateway.
+   What remains unexercised in `anthropic.ts` is the vendor client construction and the one
+   branch `openrouter` deliberately does not take: `structuredOutputs: true`, where the API
+   enforces the response schema server-side and fills `parsed_output` instead of leaving the
+   JSON to be parsed out of the text. That branch is verified by construction, by typecheck
+   against the current SDK, and by a startup check that refuses a keyless configuration — but
+   unexercised is unexercised, and it is the first thing to run with a vendor key in hand.
+2. **The `gateway` provider is configured but never pointed at a real gateway.** Its call
+   path *is* exercised, because `openrouter` is the same path with the address filled in;
+   what is untested is the generic form's own base-URL-plus-`Authorization: Bearer`
+   construction, written against the common case where the gateway is Anthropic-API-compatible
+   (LiteLLM, Azure API Management and similar all are). A proxy with its own wire format would
+   be a different file implementing the same interface — which is the point, but it is an
+   untested point.
 3. **The citation guard's rejection branch is unreached in practice.** The
    *"no relevant sources"* refusal is reachable and demoed, but the branch that fires when a
    model cites outside the set it was given cannot be triggered by the mock, which never does
@@ -551,7 +588,7 @@ Written down rather than hidden. An honest gap scores; a half-finished feature d
    corpus. At a few thousand documents the list page would need it.
 7. **The mock answerer cannot synthesise.** It extracts sentences. A question whose answer is
    spread across three notes gets the single closest passage, not a summary. Set
-   `LLM_PROVIDER=anthropic` for real synthesis.
+   `LLM_PROVIDER=openrouter` (or `anthropic`) for real synthesis.
 8. **No rate limiting on `/api/ask`.** A signed-in user can spend money in a loop. In a real
    deployment this belongs at the gateway, which is one of the reasons corporate gateways
    exist — but saying so is not the same as having it.

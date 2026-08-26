@@ -26,5 +26,9 @@ export function createAnthropicProvider(): LlmProvider {
     timeout: env.LLM_TIMEOUT_MS * 2,
   });
 
-  return createMessagesProvider("anthropic", client);
+  // The vendor's own API, so the newest features are available: let the server
+  // enforce the response shape as well as our own zod check.
+  return createMessagesProvider("anthropic", client, {
+    structuredOutputs: true,
+  });
 }

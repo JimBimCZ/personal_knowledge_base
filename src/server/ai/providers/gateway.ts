@@ -16,11 +16,12 @@ import { env } from "@/server/env";
  * vendor. Everything downstream — prompt, request, parsing, the citation guard
  * — is untouched, because it is the same `createMessagesProvider` call.
  *
- * Honest about its status: this path is written against the common case, where
- * the gateway is Anthropic-API-compatible (LiteLLM, Azure API Management and
- * similar all are). It is configured but not exercised against a real gateway,
- * and the README says so. A proxy with its own wire format would be a different
- * file implementing the same interface — which is precisely the point.
+ * This is the generic form, for a gateway whose base URL and credential you
+ * supply. `openrouter.ts` is the same thing with the address filled in, and
+ * running it exercises this exact code path against a real third-party gateway —
+ * so the pattern below is demonstrated, even though this particular file is
+ * configured rather than exercised. A proxy with its own wire format would be a
+ * different file implementing the same interface, which is precisely the point.
  */
 export function createGatewayProvider(): LlmProvider {
   if (!env.LLM_GATEWAY_BASE_URL) {
@@ -35,5 +36,9 @@ export function createGatewayProvider(): LlmProvider {
     timeout: env.LLM_TIMEOUT_MS * 2,
   });
 
-  return createMessagesProvider("gateway", client);
+  // Structured outputs off, for the same reason as openrouter.ts: a proxy need
+  // not implement every feature of the API it fronts.
+  return createMessagesProvider("gateway", client, {
+    structuredOutputs: false,
+  });
 }
