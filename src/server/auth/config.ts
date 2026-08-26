@@ -5,6 +5,7 @@ import { db } from "@/server/db";
 import { users } from "@/server/db/schema";
 import { env, idpFetch } from "@/server/env";
 import { logger } from "@/server/log/logger";
+import { seedUserIfEmpty } from "@/server/rag/seed";
 
 declare module "next-auth" {
   interface Session {
@@ -97,6 +98,10 @@ const config: NextAuthConfig = {
 
       // Log the event, not the person: subject and roles, never name or email.
       logger.info({ sub, roles }, "sign-in");
+
+      // A new user starts with the synthetic corpus so there is something to
+      // search immediately. No-op for anyone who already has documents.
+      await seedUserIfEmpty(sub);
     },
 
     async signOut(message) {

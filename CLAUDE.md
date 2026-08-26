@@ -192,8 +192,13 @@ means re-embedding, and the app must say so rather than silently returning nonse
 
 The one functional promise of this app: **an answer without a source is not shipped.**
 
-1. Ingest: accept `.md`, `.txt`, `.pdf`. Store the original text, chunk it (~800 tokens, ~100
-   overlap), keep `documentId`, `chunkIndex`, and character offsets for every chunk.
+1. Ingest: accept `.md`, `.txt`, `.pdf`. Store the original text, chunk it, and keep
+   `documentId`, `chunkIndex`, and character offsets for every chunk.
+   **Chunk size is dictated by the embedding model's input window, not chosen freely.**
+   `all-MiniLM-L6-v2` accepts 512 tokens and silently truncates past that, so anything larger
+   is stored and citable but invisible to retrieval. Target ~500 tokens with ~100 overlap,
+   budgeted pessimistically at 3 characters per token. Changing the embedding model means
+   re-checking this number.
 2. Retrieve: vector search over the signed-in user's own chunks only. Ownership is filtered in SQL,
    never in application code after the fetch.
 3. Answer: the model receives numbered chunks and must return JSON

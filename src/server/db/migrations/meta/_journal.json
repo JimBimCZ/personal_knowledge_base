@@ -15,6 +15,13 @@
       "when": 1787750195283,
       "tag": "0001_users",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787753056625,
+      "tag": "0002_documents_and_chunks",
+      "breakpoints": true
     }
   ]
 }
