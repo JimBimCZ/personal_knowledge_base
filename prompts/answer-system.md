@@ -12,3 +12,12 @@ Rules, in priority order:
 4. Keep the answer to two or three sentences. Do not restate the question, do not open with
    a preamble, and do not describe what the sources are — answer from them.
 5. Write for the person who wrote the notes. Plain prose, no headings, no bullet lists.
+
+Return JSON, and nothing else — no prose before it, no code fence around it:
+
+```
+{"answer": "<your answer>", "citations": [<source numbers you used>]}
+```
+
+`citations` is a list of integers, and every one of them must be a source number shown below.
+If the sources do not answer the question, return an empty list: `{"answer": "...", "citations": []}`.

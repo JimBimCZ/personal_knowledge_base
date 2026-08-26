@@ -39,11 +39,14 @@ const envSchema = z.object({
   // `mock` is the default because the app must be fully demoable with no API
   // key set (CLAUDE.md §5). It extracts from the retrieved chunks instead of
   // generating; `anthropic` is the real run.
-  LLM_PROVIDER: z.enum(["anthropic", "gateway", "mock"]).default("mock"),
+  LLM_PROVIDER: z
+    .enum(["anthropic", "openrouter", "gateway", "mock"])
+    .default("mock"),
   LLM_MODEL: z.string().min(1).default("claude-opus-5"),
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  OPENROUTER_API_KEY: z.string().min(1).optional(),
   LLM_GATEWAY_BASE_URL: z.string().min(1).optional(),
   LLM_GATEWAY_API_KEY: z.string().min(1).optional(),
 
@@ -96,6 +99,7 @@ const BUILD_PHASE_PLACEHOLDERS: Env = {
   LLM_MODEL: "claude-opus-5",
   LLM_TIMEOUT_MS: 60_000,
   ANTHROPIC_API_KEY: undefined,
+  OPENROUTER_API_KEY: undefined,
   LLM_GATEWAY_BASE_URL: undefined,
   LLM_GATEWAY_API_KEY: undefined,
   RAG_TOP_K: 6,
@@ -145,6 +149,11 @@ function loadEnv(): Env {
   if (config.LLM_PROVIDER === "anthropic" && !config.ANTHROPIC_API_KEY) {
     throw new Error(
       "LLM_PROVIDER=anthropic requires ANTHROPIC_API_KEY. Use LLM_PROVIDER=mock to run without a key.",
+    );
+  }
+  if (config.LLM_PROVIDER === "openrouter" && !config.OPENROUTER_API_KEY) {
+    throw new Error(
+      "LLM_PROVIDER=openrouter requires OPENROUTER_API_KEY. Use LLM_PROVIDER=mock to run without a key.",
     );
   }
   if (config.LLM_PROVIDER === "gateway" && !config.LLM_GATEWAY_BASE_URL) {

@@ -1,14 +1,16 @@
 import { z } from "zod";
 
 /**
- * The shape the model must return. Shared by the two providers that speak the
+ * The shape the model must return. Shared by every provider that speaks the
  * Anthropic wire format; the mock constructs its result directly.
  *
- * The API is asked to enforce this server-side (structured outputs), and we
- * validate it again on arrival. That is not belt-and-braces for its own sake:
- * `gateway` points at whatever a company puts in front of the model, and there
- * is no guarantee a proxy enforces anything. A malformed response has to fail
- * as a rejected answer, never as an undefined field read three files away.
+ * At the vendor, the API is asked to enforce this server-side (structured
+ * outputs). Through a gateway it is not, because a proxy is under no obligation
+ * to implement a recent addition to the API it fronts — there the prompt states
+ * the contract and the JSON is parsed out of the response text. Either way this
+ * schema validates what arrives, which is the part that must not be optional:
+ * a malformed response has to fail as a rejected answer, never as an undefined
+ * field read three files away.
  */
 export const answerSchema = z.object({
   answer: z.string(),
