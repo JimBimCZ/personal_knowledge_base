@@ -11,8 +11,18 @@ interface Citation {
   content: string;
 }
 
+interface Privacy {
+  redactedQuestion: string;
+  replaced: { persons: number; emails: number; phones: number };
+}
+
 type AskResult =
-  | { status: "answered"; answer: string; citations: Citation[] }
+  | {
+      status: "answered";
+      answer: string;
+      citations: Citation[];
+      privacy: Privacy;
+    }
   | { status: "not_found"; reason: string };
 
 /**
@@ -95,6 +105,8 @@ export function AskForm() {
         <div className="mt-6">
           <p className="whitespace-pre-wrap text-slate-900">{result.answer}</p>
 
+          <PrivacyPanel privacy={result.privacy} />
+
           <h2 className="mt-6 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Sources
           </h2>
@@ -116,5 +128,47 @@ export function AskForm() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Makes the anonymizer visible, which CLAUDE.md §3 requires rather than
+ * merely permits.
+ *
+ * It shows the question exactly as it left the process. The answer above it
+ * has already had the placeholders replaced, so the two together demonstrate
+ * both directions of the round trip on screen: personal data out, personal
+ * data back in. Showing the user their own values is not a leak — they own the
+ * documents — but the mapping itself is never sent here, only the counts.
+ */
+function PrivacyPanel({ privacy }: { privacy: Privacy }) {
+  const { persons, emails, phones } = privacy.replaced;
+  const total = persons + emails + phones;
+
+  return (
+    <details className="mt-4 rounded border border-slate-200 bg-slate-50 p-3">
+      <summary className="cursor-pointer text-xs text-slate-600">
+        {total === 0
+          ? "Nothing personal was found to redact"
+          : `${total} value${total === 1 ? "" : "s"} redacted before this left the app`}
+      </summary>
+
+      <p className="mt-3 text-xs font-medium text-slate-500">
+        The question as it was sent to the model
+      </p>
+      <p className="mt-1 font-mono text-xs text-slate-800">
+        {privacy.redactedQuestion}
+      </p>
+
+      {total > 0 && (
+        <p className="mt-3 text-xs text-slate-500">
+          Replaced across the question and the retrieved passages: {persons}{" "}
+          name{persons === 1 ? "" : "s"}, {emails} e-mail
+          {emails === 1 ? "" : "s"}, {phones} phone number
+          {phones === 1 ? "" : "s"}. The mapping back exists only for the life of
+          the request and is never stored or logged.
+        </p>
+      )}
+    </details>
   );
 }

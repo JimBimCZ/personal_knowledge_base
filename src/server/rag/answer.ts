@@ -1,19 +1,26 @@
 import { getLlmProvider } from "@/server/ai";
 import { answerWithAudit } from "@/server/ai/call";
 import { logger } from "@/server/log/logger";
-import { retrieveChunks, type RetrievedChunk } from "@/server/rag/retrieve";
+import { createAnonymizer, type RedactionCounts } from "@/server/privacy/anonymizer";
+import { resolveCitations, type Citation } from "@/server/rag/citations";
+import { retrieveChunks } from "@/server/rag/retrieve";
 
-export interface Citation {
-  chunkId: string;
-  documentId: string;
-  filename: string;
-  chunkIndex: number;
-  /** The passage the answer was drawn from, so the UI can show it in place. */
-  content: string;
+export type { Citation };
+
+export interface Privacy {
+  /** The question exactly as it left this process. Contains no personal data. */
+  redactedQuestion: string;
+  /** How many DISTINCT values were replaced across the question and sources. */
+  replaced: RedactionCounts;
 }
 
 export type AskResult =
-  | { status: "answered"; answer: string; citations: Citation[] }
+  | {
+      status: "answered";
+      answer: string;
+      citations: Citation[];
+      privacy: Privacy;
+    }
   /** The honest outcome. `reason` is for the log and the UI's explanation. */
   | { status: "not_found"; reason: "no_relevant_chunks" | "citations_rejected" };
 
@@ -35,11 +42,21 @@ export const NOT_FOUND_MESSAGE = "Not found in your knowledge base.";
  * One retry is allowed, with a stricter prompt, and then we stop. A model that
  * cites badly twice is not going to be argued into citing well, and each retry
  * is another call the user waits for and pays for.
+ *
+ * ANONYMIZATION (§7) wraps the model call on both sides. One anonymizer is
+ * created here, per request, and dies with it — it holds the only mapping that
+ * can turn a placeholder back into a person, so it is never stored and never
+ * logged. Because the same instance redacts the question AND the chunks, a
+ * value gets the same placeholder everywhere: a question about "Marek Dvořák"
+ * still matches a chunk about him, since both now say `[PERSON_1]`.
  */
 export async function askQuestion(
   ownerSub: string,
   question: string,
 ): Promise<AskResult> {
+  // Retrieval runs on the ORIGINAL text: embeddings are computed in-process
+  // (nothing leaves), and searching redacted text would mean searching for
+  // placeholders instead of for what the user actually asked about.
   const retrieved = await retrieveChunks(ownerSub, question);
 
   // Nothing cleared the similarity floor. The corpus does not cover this, and
@@ -49,18 +66,24 @@ export async function askQuestion(
     return { status: "not_found", reason: "no_relevant_chunks" };
   }
 
-  const provider = getLlmProvider();
+  const anonymizer = createAnonymizer();
+  const redactedQuestion = anonymizer.redact(question);
   const input = {
-    question,
+    question: redactedQuestion,
     chunks: retrieved.map((c) => ({
       id: c.id,
       documentId: c.documentId,
-      content: c.content,
+      content: anonymizer.redact(c.content),
     })),
   };
 
+  const privacy: Privacy = {
+    redactedQuestion,
+    replaced: anonymizer.counts(),
+  };
+
   for (const retry of [false, true]) {
-    const result = await answerWithAudit(provider, { ...input, retry });
+    const result = await answerWithAudit(getLlmProvider(), { ...input, retry });
     const citations = resolveCitations(result.citations, retrieved);
 
     if (citations.length > 0 && result.answer.trim().length > 0) {
@@ -72,10 +95,19 @@ export async function askQuestion(
           chunksRetrieved: retrieved.length,
           citationCount: citations.length,
           topScore: Number(retrieved[0]!.score.toFixed(3)),
+          redacted: privacy.replaced,
         },
         "ask",
       );
-      return { status: "answered", answer: result.answer, citations };
+
+      return {
+        status: "answered",
+        // Back to plain text on the way out. The citations keep the original
+        // chunk content, which the user owns and is entitled to read.
+        answer: anonymizer.restore(result.answer),
+        citations,
+        privacy,
+      };
     }
 
     // Worth a warning: a model citing outside the set it was given is the
@@ -94,38 +126,4 @@ export async function askQuestion(
 
   logger.info({ sub: ownerSub, outcome: "citations_rejected" }, "ask");
   return { status: "not_found", reason: "citations_rejected" };
-}
-
-/**
- * Positions to real chunks, dropping anything out of range or repeated.
- *
- * Dropping rather than repairing is the point: if the model cited [9] out of
- * six sources, that citation supports nothing, and an answer left with no
- * surviving citations is rejected by the caller. Order follows the model's, so
- * the UI lists sources in the order the answer used them.
- */
-function resolveCitations(
-  positions: number[],
-  retrieved: RetrievedChunk[],
-): Citation[] {
-  const seen = new Set<number>();
-  const citations: Citation[] = [];
-
-  for (const position of positions) {
-    if (position < 1 || position > retrieved.length || seen.has(position)) {
-      continue;
-    }
-    seen.add(position);
-
-    const chunk = retrieved[position - 1]!;
-    citations.push({
-      chunkId: chunk.id,
-      documentId: chunk.documentId,
-      filename: chunk.filename,
-      chunkIndex: chunk.chunkIndex,
-      content: chunk.content,
-    });
-  }
-
-  return citations;
 }

@@ -103,3 +103,39 @@ export const chunks = pgTable(
 
 export type Document = typeof documents.$inferSelect;
 export type Chunk = typeof chunks.$inferSelect;
+
+/**
+ * One row per call that left this process (CLAUDE.md §3).
+ *
+ * What is here is exactly the enumerated list — model, timestamp, token counts,
+ * latency, outcome — and NOTHING else. In particular:
+ *
+ * - No prompt, no answer, no document text. Those are the things §3 forbids,
+ *   and the table has nowhere to put them even by accident.
+ * - No `owner_sub`. The record exists to answer "what did this app spend, and
+ *   how did it behave", not "what did this person ask". Adding the subject
+ *   would quietly turn a cost-and-latency table into a 30-day behavioural log
+ *   of every user, which is a different thing with a different justification.
+ *
+ * Purged after RETENTION_AUDIT_DAYS by retention/purge.ts.
+ */
+export const llmCalls = pgTable(
+  "llm_calls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull(),
+    outputTokens: integer("output_tokens").notNull(),
+    latencyMs: integer("latency_ms").notNull(),
+    /** ok | timeout | error */
+    outcome: text("outcome").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  // The purge job scans by age, and it is the only query that scans this table.
+  (table) => [index("llm_calls_created_at_idx").on(table.createdAt)],
+);
+
+export type LlmCall = typeof llmCalls.$inferSelect;

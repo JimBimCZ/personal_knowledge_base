@@ -53,6 +53,16 @@ const envSchema = z.object({
   // answer. Both embedders produce unit vectors, so the number means the same
   // thing in either mode. Tuned against the seed corpus — see the README.
   RAG_MIN_SCORE: z.coerce.number().min(0).max(1).default(0.25),
+
+  // --- Retention ------------------------------------------------------
+  // How long an LLM audit record (model, time, tokens, latency, outcome) is
+  // kept before the hourly purge removes it. Fractional and zero are allowed
+  // on purpose: a retention policy you cannot demonstrate is one nobody
+  // believes, and `RETENTION_AUDIT_DAYS=0` makes the purge provable in one
+  // restart. There is no matching variable for application logs — those go to
+  // stdout and this process never stores them, so their retention belongs to
+  // the operator's log collector.
+  RETENTION_AUDIT_DAYS: z.coerce.number().min(0).default(30),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -90,6 +100,7 @@ const BUILD_PHASE_PLACEHOLDERS: Env = {
   LLM_GATEWAY_API_KEY: undefined,
   RAG_TOP_K: 6,
   RAG_MIN_SCORE: 0.25,
+  RETENTION_AUDIT_DAYS: 30,
 };
 
 /**
