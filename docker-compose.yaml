@@ -1,5 +1,4 @@
 # `cp .env.example .env && docker compose up` must be the whole story.
-# Keycloak joins in slice 2.
 
 services:
   db:
@@ -20,6 +19,34 @@ services:
       retries: 10
       start_period: 10s
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.2
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # The browser reaches Keycloak here, and this is what lands in the
+      # token's `iss`. Must be a full URL when backchannel-dynamic is on.
+      KC_HOSTNAME: http://localhost:8080
+      # Lets the app container talk to Keycloak over the compose network
+      # (http://keycloak:8080) while the issuer stays the browser-facing URL.
+      # Without this, `iss` validation fails — the classic Keycloak-in-Docker trap.
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./infra/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
   app:
     build:
       context: .
@@ -27,9 +54,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      keycloak:
+        condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL}
       LOG_LEVEL: ${LOG_LEVEL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL}
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OIDC_SCOPES: ${OIDC_SCOPES}
+      OIDC_ROLES_CLAIM: ${OIDC_ROLES_CLAIM}
+      OIDC_INTERNAL_ORIGIN: ${OIDC_INTERNAL_ORIGIN}
     ports:
       - "3000:3000"
 

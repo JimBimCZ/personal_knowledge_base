@@ -52,3 +52,21 @@ Format: `YYYY-MM-DD — decision — why — what was rejected`
 2026-08-26 — `/api/health` returns a generic "database unreachable" to the caller while the detailed error goes to the log — driver errors can carry the connection string, and health endpoints are typically the least authenticated surface in the app — rejected returning the driver message.
 
 2026-08-26 — The assignment brief is git-ignored — the repo is public and the brief is the hiring company's document, so publishing it is the author's call to make deliberately, not a side effect of `git add -A` — rejected committing it by default.
+
+## Slice 2 — OIDC sign-in, roles and the guard
+
+2026-08-26 — The Keycloak-in-Docker issuer mismatch is solved with `KC_HOSTNAME=http://localhost:8080` plus `KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true` — Keycloak then reports one issuer (`localhost:8080`, what the browser uses and what lands in `iss`) while advertising backchannel endpoints on the container network, so token exchange and JWKS work from inside the app with no issuer mismatch and no code — rejected `extra_hosts: localhost:host-gateway`, tested and shown not to work because the built-in `127.0.0.1 localhost` entry wins resolution; rejected proxying Keycloak under the app origin, which works but adds a route the production topology would not have.
+
+2026-08-26 — The server reaches the IdP through `idpFetch`, wired in as Auth.js's `customFetch` — Auth.js discovers from the issuer URL and ignores `wellKnown` (verified in `@auth/core/lib/actions/signin/authorization-url.js`, which builds `new URL(provider.issuer)`), and that URL is by definition the browser's address, unreachable from a container; `customFetch` is the supported hook and rewrites only the issuer's origin, so it is a plain fetch against a public IdP — rejected `wellKnown`, which is silently ignored on this path.
+
+2026-08-26 — The OIDC provider declares `profile: (p) => ({ id: p.sub, ... })` — without it Auth.js generates its own user id and puts that in `token.sub`, producing a **different subject on every sign-in**; since everything a user owns is keyed by subject, that would have silently detached each user from their own documents in slice 3 and looked like a retrieval bug — found by asserting the session subject equals the IdP subject rather than by reading code.
+
+2026-08-26 — The provider id is `oidc`, not the vendor name — the id appears in the callback URL (`/api/auth/callback/oidc`), so naming it after the provider would hard-code the vendor into a URL registered at the IdP, breaking the configuration-only swap required by §3 — rejected `keycloak` as the id.
+
+2026-08-26 — Env validation is skipped during `next build` (`NEXT_PHASE === "phase-production-build"`) instead of supplying build-time values in the Dockerfile — `next build` imports every route module to read its config exports, which reaches the env schema; satisfying it in the Dockerfile would mean baking six placeholder values, including one named `OIDC_CLIENT_SECRET`, into an image layer of a repo graded on secret hygiene — rejected the Dockerfile placeholders used in slice 1, now removed.
+
+2026-08-26 — Authorization lives in one `requireRole()` guard that throws, with a matching `authErrorResponse()` — route handlers stay three lines and cannot accidentally fall through to a 200 when the guard rejects; a denied attempt is logged at warn as a security event — rejected returning booleans from the guard, which makes forgetting to check a silent failure.
+
+2026-08-26 — Sign-in logs the subject and roles, never the display name or e-mail — the log is an audit trail of events, not a copy of the user directory, and §3 forbids personal data in logs — rejected logging the profile.
+
+2026-08-26 — Roles are read from the token claim on every request, never from `users.role_snapshot` — the snapshot exists for display and for the admin count; if authorization read the database, revoking a role at the IdP would not take effect until the app happened to write a row — rejected treating the projection as authoritative.
