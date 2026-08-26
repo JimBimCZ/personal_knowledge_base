@@ -54,7 +54,8 @@ configured, and answers differently because of it, is worse than one that will n
 
 ## What to try
 
-Six things, each of which demonstrates one mandatory condition:
+Seven things, each demonstrating one mandatory condition. Every one of these was run against
+a fresh `git clone` before this README was written.
 
 1. **A cited answer.** Ask *"How should I size a power supply for a high-end GPU build?"*
    Every answer carries numbered source links. Click one: it opens the source document
@@ -62,17 +63,28 @@ Six things, each of which demonstrates one mandatory condition:
 2. **The citation guarantee.** Ask *"What is the best recipe for sourdough bread starter?"*
    The corpus cannot answer it, so the app returns **"Not found in your knowledge base."**
    and never calls the model at all.
-3. **Anonymization, both directions.** Ask *"What did Marek Dvorak say about the RAM kit and
-   how do I reach him?"* Expand **"N values redacted before this left the app"** — it shows
-   the question exactly as it was sent: `What did [PERSON_1] say about the RAM kit…`. The
-   answer above it has the real names, e-mails and phone numbers restored.
-4. **Server-side authorization.** Signed in as `alice`, open
-   http://localhost:3000/api/admin/stats → **403**, from the server, with no UI involved.
-   Signed in as `admin` → 200. Nothing is hidden in the browser; the guard is the control.
-5. **Retention, enforced.** Set `RETENTION_AUDIT_DAYS=0`, restart, and watch the log line
-   `{"table":"llm_calls","purged":N}` and an empty table. Set it back to 30.
-6. **Delete my account.** On the home page. Wipes every document, chunk and embedding
-   belonging to that subject, immediately. The other user's data is untouched.
+3. **Anonymization, outbound.** Ask *"What did Marek Dvorak say about the RAM kit?"* Expand
+   **"N values redacted before this left the app"**: it shows the question exactly as it was
+   sent — `What did [PERSON_1] say about the RAM kit?`
+4. **Anonymization, inbound.** Ask *"Who should I contact about the CAKE configuration on my
+   router?"* The panel reports that a name, an e-mail and a phone number were redacted before
+   the call, and the answer above it reads *"David Kraus (david.kraus@example.com,
+   +420 603 456 789) set up the CAKE configuration…"* — restored on the way back.
+   (This answer also shows the PDF word-splitting artifact in gap 5: `configur ation`.)
+5. **Server-side authorization.** Signed in as `alice`, open
+   http://localhost:3000/api/admin/stats → **403 `{"error":"insufficient role"}`**, from the
+   server, with no UI involved. Signed in as `admin` → 200. Nothing is hidden in the browser;
+   the guard is the control.
+6. **Retention, enforced.** Set `RETENTION_AUDIT_DAYS=0`, restart, and watch the log line
+   `{"table":"llm_calls","purged":N,"msg":"retention purge"}` and an empty table. Set it back
+   to 30.
+7. **Delete my account.** On the home page. Wipes every document, chunk and embedding
+   belonging to that subject, immediately. The other user's data is untouched, and signing
+   back in re-seeds a fresh corpus.
+
+Two of these depend on the mock answerer picking particular sentences. With
+`LLM_PROVIDER=anthropic` the answers are better written, but the citations, the refusal and
+the redaction behave identically — those are enforced by the app, not by the model.
 
 ---
 
@@ -131,6 +143,12 @@ data-protection profile argued in [Classification](#classification-medium).
 
 The model is baked into the image at build time with remote fetching disabled, so the
 container never contacts the Hugging Face Hub and `docker compose up` works offline.
+
+`mock` is the alternative: a deterministic hashing embedder with no model and no network,
+used by anything that cannot load onnxruntime. It degrades semantic search to lexical
+matching — it matches on shared vocabulary and knows nothing about meaning — so it is a test
+and fallback path, **not** the demo path. `local` is the default, needs no API key, and is
+baked into the image, so `docker compose up` gives real semantic retrieval.
 
 Vectors from different models are not comparable, so every chunk records the
 `embedding_model` that produced it and retrieval filters on the active one. Changing the
