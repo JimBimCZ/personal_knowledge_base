@@ -34,6 +34,25 @@ const envSchema = z.object({
   EMBEDDING_PROVIDER: z.enum(["local", "mock"]).default("local"),
   EMBEDDING_MODEL: z.string().min(1).default("Xenova/all-MiniLM-L6-v2"),
   EMBEDDING_CACHE_DIR: z.string().min(1).default("./.models"),
+
+  // --- Answering ------------------------------------------------------
+  // `mock` is the default because the app must be fully demoable with no API
+  // key set (CLAUDE.md §5). It extracts from the retrieved chunks instead of
+  // generating; `anthropic` is the real run.
+  LLM_PROVIDER: z.enum(["anthropic", "gateway", "mock"]).default("mock"),
+  LLM_MODEL: z.string().min(1).default("claude-opus-5"),
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  LLM_GATEWAY_BASE_URL: z.string().min(1).optional(),
+  LLM_GATEWAY_API_KEY: z.string().min(1).optional(),
+
+  // --- Retrieval ------------------------------------------------------
+  RAG_TOP_K: z.coerce.number().int().positive().max(50).default(6),
+  // Cosine similarity below which the corpus is treated as not containing the
+  // answer. Both embedders produce unit vectors, so the number means the same
+  // thing in either mode. Tuned against the seed corpus — see the README.
+  RAG_MIN_SCORE: z.coerce.number().min(0).max(1).default(0.25),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -63,14 +82,38 @@ const BUILD_PHASE_PLACEHOLDERS: Env = {
   EMBEDDING_PROVIDER: "mock",
   EMBEDDING_MODEL: "Xenova/all-MiniLM-L6-v2",
   EMBEDDING_CACHE_DIR: "./.models",
+  LLM_PROVIDER: "mock",
+  LLM_MODEL: "claude-opus-5",
+  LLM_TIMEOUT_MS: 60_000,
+  ANTHROPIC_API_KEY: undefined,
+  LLM_GATEWAY_BASE_URL: undefined,
+  LLM_GATEWAY_API_KEY: undefined,
+  RAG_TOP_K: 6,
+  RAG_MIN_SCORE: 0.25,
 };
+
+/**
+ * An unset variable does not arrive as absent — it arrives as "".
+ *
+ * `.env.example` ships blank values for the credentials that are only needed in
+ * one mode (`ANTHROPIC_API_KEY=`), and Docker Compose turns an interpolation of
+ * an unset variable into an empty string too. Zod sees "" as a present value,
+ * so a blank optional fails `.min(1)` and a blank enum never reaches its
+ * default. Treating empty as absent is what everyone already assumes is
+ * happening, and it makes `cp .env.example .env && docker compose up` work.
+ */
+function withoutBlanks(source: NodeJS.ProcessEnv): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(source).filter(([, value]) => value !== undefined && value !== ""),
+  ) as Record<string, string>;
+}
 
 function loadEnv(): Env {
   if (process.env.NEXT_PHASE === "phase-production-build") {
     return BUILD_PHASE_PLACEHOLDERS;
   }
 
-  const parsed = envSchema.safeParse(process.env);
+  const parsed = envSchema.safeParse(withoutBlanks(process.env));
 
   if (!parsed.success) {
     // Report variable NAMES only. The offending value may itself be a secret,
@@ -81,7 +124,23 @@ function loadEnv(): Env {
     );
   }
 
-  return parsed.data;
+  const config = parsed.data;
+
+  // A provider selected without its credential is a configuration mistake, and
+  // it must fail here rather than on the first question a user asks. There is
+  // deliberately no silent fallback to `mock`: an app that quietly stops using
+  // the model you paid for, and answers differently because of it, is worse
+  // than one that refuses to start.
+  if (config.LLM_PROVIDER === "anthropic" && !config.ANTHROPIC_API_KEY) {
+    throw new Error(
+      "LLM_PROVIDER=anthropic requires ANTHROPIC_API_KEY. Use LLM_PROVIDER=mock to run without a key.",
+    );
+  }
+  if (config.LLM_PROVIDER === "gateway" && !config.LLM_GATEWAY_BASE_URL) {
+    throw new Error("LLM_PROVIDER=gateway requires LLM_GATEWAY_BASE_URL.");
+  }
+
+  return config;
 }
 
 export const env = loadEnv();

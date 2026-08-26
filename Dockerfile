@@ -49,6 +49,7 @@ COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/src/server/db/migrations ./src/server/db/migrations
 COPY --from=builder --chown=node:node /app/.models ./.models
 COPY --from=builder --chown=node:node /app/seed ./seed
+COPY --from=builder --chown=node:node /app/prompts ./prompts
 
 EXPOSE 3000
 

@@ -29,12 +29,14 @@ export default async function HomePage() {
               <span className="italic">none</span>
             )}
           </p>
-          <a
-            className="mt-4 inline-block text-sm underline"
-            href="/documents"
-          >
-            Your documents
-          </a>
+          <div className="mt-4 flex gap-4 text-sm">
+            <a className="underline" href="/ask">
+              Ask your notes
+            </a>
+            <a className="underline" href="/documents">
+              Your documents
+            </a>
+          </div>
           <form
             action={async () => {
               "use server";

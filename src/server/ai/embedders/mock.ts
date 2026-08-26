@@ -1,3 +1,4 @@
+import { significantTerms } from "@/server/ai/lexical";
 import { EMBEDDING_DIMENSIONS, type EmbeddingProvider } from "@/server/ai/types";
 
 /**
@@ -23,27 +24,6 @@ import { EMBEDDING_DIMENSIONS, type EmbeddingProvider } from "@/server/ai/types"
  * - Unigrams only. Adding bigrams was tried and made every probe worse: 384
  *   buckets are too few, and the extra terms collide into noise.
  */
-
-/** Enough to stop function words dominating; not a linguistic resource. */
-const STOPWORDS = new Set(
-  ("a an and are as at be but by can did do does done for from had has have how i if in into" +
-    " is it its just me my no not of on or so than that the their then there these they this" +
-    " to too was were what when where which who why will with would you your")
-    .split(" "),
-);
-
-const MIN_TOKEN_LENGTH = 3;
-
-function significantTerms(text: string): Map<string, number> {
-  const counts = new Map<string, number>();
-
-  for (const token of text.toLowerCase().match(/[a-z0-9]+/g) ?? []) {
-    if (token.length < MIN_TOKEN_LENGTH || STOPWORDS.has(token)) continue;
-    counts.set(token, (counts.get(token) ?? 0) + 1);
-  }
-
-  return counts;
-}
 
 /** FNV-1a. Small, fast, and spreads tokens evenly across the buckets. */
 function hash(token: string): number {
