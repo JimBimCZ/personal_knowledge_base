@@ -16,11 +16,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# `next build` imports every route module to read its config exports, which
-# reaches src/server/env.ts and triggers validation. Give it a syntactically
-# valid placeholder; the runtime value comes from the environment, and this
-# one is never connected to.
-ENV DATABASE_URL="postgres://build:build@build:5432/build"
+# No build-time configuration is set here on purpose: nothing fake, and no
+# secret-shaped value, ever enters an image layer. src/server/env.ts skips
+# validation during the build phase and the server validates for real at startup.
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
