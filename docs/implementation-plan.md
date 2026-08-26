@@ -122,6 +122,12 @@ RAG_MIN_SCORE  RAG_TOP_K
 RETENTION_AUDIT_DAYS  RETENTION_LOG_DAYS
 ```
 
+**Deviation, as built:** `RETENTION_LOG_DAYS` was NOT implemented, and `LLM_TIMEOUT_MS` and
+`EMBEDDING_CACHE_DIR` were added. Application and auth logs go to stdout — this process never
+stores them, so it cannot purge them, and shipping a variable that does nothing would have
+been worse than not having one. The reasoning is in the README's retention section, stated as
+an interpretation rather than guessed silently.
+
 ## 8. Slice order
 
 Unchanged from `CLAUDE.md` §8, with the corrections above folded in. Slice 3 gains the
@@ -129,8 +135,15 @@ Unchanged from `CLAUDE.md` §8, with the corrections above folded in. Slice 3 ga
 
 Seed data (slice 3's input) is already done: 10 synthetic documents in `seed/`.
 
-## 9. Open item for the author
+## 9. Open item for the author — CLOSED
 
-`CLAUDE.md` §5 still shows the single combined interface. It needs the §1 correction above
-before it is safe to code against, since it is the governing spec. Not edited yet — the
-author owns that file.
+`CLAUDE.md` §5 has since been corrected to show the two split interfaces, so this plan and
+the governing spec agree. §1 above is kept as the record of *why* they differ from the
+original brief, which is the part worth explaining at the interview.
+
+Two items in `CLAUDE.md` remain the author's call and are deliberately not edited here:
+
+- **§10 still labels the classification a draft.** The README now commits to **MEDIUM** and
+  states the criteria it used. If that wording is right, §10 can be settled to match.
+- **§8's slice budget** was written before the build. What actually happened, and what was
+  cut, is in the README under *Known gaps*.
