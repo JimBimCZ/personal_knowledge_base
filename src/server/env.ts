@@ -27,6 +27,13 @@ const envSchema = z.object({
   // browser does — the case for a mock IdP on a container network. Against a
   // public IdP such as Entra ID this stays unset and both use OIDC_ISSUER.
   OIDC_INTERNAL_ORIGIN: z.string().min(1).optional(),
+
+  // --- Embeddings -----------------------------------------------------
+  // `local` runs the model in this process; `mock` is a deterministic hashing
+  // embedder with no model, used by tests and anywhere the model is absent.
+  EMBEDDING_PROVIDER: z.enum(["local", "mock"]).default("local"),
+  EMBEDDING_MODEL: z.string().min(1).default("Xenova/all-MiniLM-L6-v2"),
+  EMBEDDING_CACHE_DIR: z.string().min(1).default("./.models"),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -53,6 +60,9 @@ const BUILD_PHASE_PLACEHOLDERS: Env = {
   OIDC_SCOPES: "openid profile email",
   OIDC_ROLES_CLAIM: "roles",
   OIDC_INTERNAL_ORIGIN: undefined,
+  EMBEDDING_PROVIDER: "mock",
+  EMBEDDING_MODEL: "Xenova/all-MiniLM-L6-v2",
+  EMBEDDING_CACHE_DIR: "./.models",
 };
 
 function loadEnv(): Env {

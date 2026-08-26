@@ -70,3 +70,25 @@ Format: `YYYY-MM-DD — decision — why — what was rejected`
 2026-08-26 — Sign-in logs the subject and roles, never the display name or e-mail — the log is an audit trail of events, not a copy of the user directory, and §3 forbids personal data in logs — rejected logging the profile.
 
 2026-08-26 — Roles are read from the token claim on every request, never from `users.role_snapshot` — the snapshot exists for display and for the admin count; if authorization read the database, revoking a role at the IdP would not take effect until the app happened to write a row — rejected treating the projection as authoritative.
+
+## Slice 3 — ingest, chunking, embeddings
+
+2026-08-26 — Chunk size is derived from the embedding model's 512-token input window, not chosen for taste — `all-MiniLM-L6-v2` silently truncates beyond 512 tokens, and measurement showed 32 of 40 chunks at the original ~800-token target overran it, so roughly a third of every document was stored and citable but invisible to retrieval; after resizing, 0 of 53 chunks truncate and top similarity rose from 0.44 to 0.51 — CLAUDE.md §6 was corrected to match; rejected keeping the ~800-token figure, which presumed a model that could read it.
+
+2026-08-26 — Tokens are approximated at 3 characters each when budgeting a chunk — prose runs nearer 4.8, but tables and code are far denser; guessing low costs a slightly smaller chunk while guessing high costs silent truncation, so the error is deliberately one-sided — rejected shipping a tokenizer just to decide where to cut.
+
+2026-08-26 — The `q8` (8-bit) model weights are used rather than float32 — 23 MB in the image instead of 96 MB, identical 384 dimensions, and measured separation held (related pair 0.339 vs unrelated −0.015) — rejected float32 for a four-fold image cost with no measured retrieval benefit.
+
+2026-08-26 — `chunks.owner_sub` is denormalised from the parent document — retrieval then filters ownership in the same WHERE clause as the vector search, so a query cannot return another user's chunk even by mistake; §6 requires the filter to be in SQL, and this keeps it one predicate rather than a join — rejected joining through `documents` on every search.
+
+2026-08-26 — Deleting a document is a single DELETE carrying the ownership predicate, returning 404 when it matches nothing — a request for someone else's document deletes nothing and does not reveal whether that id exists; verified by attempting a cross-user delete — rejected fetching, checking ownership in application code, then deleting.
+
+2026-08-26 — The seed corpus is ingested on a user's first sign-in, not at startup — documents belong to a subject and no subject exists until someone signs in; it is idempotent (a user with documents is skipped) and cheap, ~2.7 s for 10 documents — rejected seeding at startup, which has no owner to attach to, and rejected precomputing embeddings into the repo, which would be wrong for whichever provider was not used.
+
+2026-08-26 — `outputFileTracingIncludes` force-includes onnxruntime and sharp binaries — Next's module tracing follows imports and copied the JavaScript but not the `.so`/`.node` files beside it, so the built image failed at runtime with `libonnxruntime.so.1: cannot open shared object file` while `next dev` was fine; this class of bug only ever appears in the image — rejected copying node_modules wholesale into the runner.
+
+2026-08-26 — Document byte size is read before text extraction — pdf.js takes ownership of the typed array it is handed and detaches the underlying buffer, after which `byteLength` reads 0; every PDF was recorded as 0 bytes until this was found — rejected reading the size after extraction.
+
+2026-08-26 — The mock embedder drops stopwords and damps term counts, and does not use bigrams — all three were measured against the seed corpus: raw counts ranked a question the corpus *cannot* answer above ones it can (0.395 vs 0.107), which is exactly backwards and would defeat the citation guard; stopwords plus sublinear damping fixed the ordering (hole falls to 0.116) and took probes from 1/3 to 2/3 correct; adding bigrams made every probe worse, as 384 buckets are too few to hold them — rejected both raw counts and bigrams, on measurement rather than intuition.
+
+2026-08-26 — The mock embedder is documented as a test and fallback path, not the demo path — `local` is the default, needs no API key, and is baked into the image, so a reviewer running `docker compose up` gets real semantic retrieval; the fallback exists because onnxruntime ships no darwin/x64 binary, so `npm run dev` outside Docker on an Intel Mac cannot load the real model — rejected claiming mock is "demoable", which measurement did not support.

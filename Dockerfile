@@ -20,6 +20,12 @@ COPY . .
 # secret-shaped value, ever enters an image layer. src/server/env.ts skips
 # validation during the build phase and the server validates for real at startup.
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Bake the embedding model into the image. The runtime has remote model loading
+# disabled, so this is the only chance to fetch it — and it means the container
+# needs no network at all.
+RUN node scripts/fetch-model.mjs
+
 RUN npm run build
 
 # --- runner -------------------------------------------------------------
@@ -38,9 +44,11 @@ USER node
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 
-# Migrations are read from disk at startup and are not traced by the bundler,
-# so they must be copied explicitly. Path matches src/server/db/migrate.ts.
+# Read from disk at runtime and not traced by the bundler, so each must be
+# copied explicitly. Paths match src/server/db/migrate.ts and src/server/rag/.
 COPY --from=builder --chown=node:node /app/src/server/db/migrations ./src/server/db/migrations
+COPY --from=builder --chown=node:node /app/.models ./.models
+COPY --from=builder --chown=node:node /app/seed ./seed
 
 EXPOSE 3000
 
