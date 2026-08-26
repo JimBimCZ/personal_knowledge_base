@@ -36,3 +36,19 @@ Format: `YYYY-MM-DD — decision — why — what was rejected`
 2026-08-26 — The `mock` embedder hashes tokens into a normalised 384-dim vector rather than returning random or constant vectors — a reviewer running `docker compose up` with no API key must get working retrieval; random vectors would score under `RAG_MIN_SCORE`, the citation guard would reject every answer, and the app would look broken while behaving correctly — rejected a pure hash of the whole chunk.
 
 2026-08-26 — Auth.js v5 accepted at `5.0.0-beta.32` despite being beta — v5 is the version whose generic OIDC provider is configured purely from env, which is what makes the Entra ID swap configuration-only; v4's provider model would need code changes to swap IdP — rejected v4 (defeats a mandatory condition) and rejected hand-rolling OIDC (more code to defend, no upside).
+
+## Slice 1 — skeleton, compose, health, logging
+
+2026-08-26 — Startup work (migrations, and later the retention purge) runs in Next's `instrumentation.ts` `register()` hook — Next guarantees `register()` completes before the server accepts requests, so a migration cannot race the first request, and it keeps startup in one obvious documented place rather than an entrypoint shell script the reviewer has to find — rejected a `docker-entrypoint.sh` running a compiled migrate script, which needs a second build artefact and splits startup across two files.
+
+2026-08-26 — Node-only startup code lives in `instrumentation.node.ts`, reached by dynamic import — `instrumentation.ts` is compiled for the edge runtime too, and a runtime `if` does not stop static analysis; the build warned about `process.version` until the Node code moved behind a dynamic import — rejected keeping one file with a guard clause.
+
+2026-08-26 — Runtime image is `node:22-bookworm-slim`, not Alpine — the local embedding provider in slice 3 pulls in onnxruntime-node, which ships glibc binaries and does not run on musl; choosing Alpine now would mean rebuilding the image layer in slice 3 — rejected `node:22-alpine` despite the smaller image.
+
+2026-08-26 — TypeScript pinned to 5.9.3 rather than the published 7.0.2 — TS 7 is the native rewrite and Next 16's toolchain targets 5.x; a home assignment is the wrong place to debug a compiler-generation mismatch — rejected latest-is-best.
+
+2026-08-26 — The builder stage sets a placeholder `DATABASE_URL` — `next build` imports every route module to read its config exports, which reaches the zod env validation and fails the build without one; the value is never connected to — rejected making env validation lazy, which would trade a two-line Dockerfile comment for cleverness in the code path that most needs to be obvious.
+
+2026-08-26 — `/api/health` returns a generic "database unreachable" to the caller while the detailed error goes to the log — driver errors can carry the connection string, and health endpoints are typically the least authenticated surface in the app — rejected returning the driver message.
+
+2026-08-26 — The assignment brief is git-ignored — the repo is public and the brief is the hiring company's document, so publishing it is the author's call to make deliberately, not a side effect of `git add -A` — rejected committing it by default.
