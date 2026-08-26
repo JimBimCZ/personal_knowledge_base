@@ -1,5 +1,7 @@
 import { auth, signIn, signOut } from "@/server/auth/config";
 
+import { DeleteAccount } from "./delete-account";
+
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
@@ -50,6 +52,13 @@ export default async function HomePage() {
               Sign out
             </button>
           </form>
+
+          <DeleteAccount
+            signOutAction={async () => {
+              "use server";
+              await signOut({ redirectTo: "/" });
+            }}
+          />
         </div>
       ) : (
         <form

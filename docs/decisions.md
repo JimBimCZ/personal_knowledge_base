@@ -122,3 +122,45 @@ Format: `YYYY-MM-DD — decision — why — what was rejected`
 2026-08-26 — The source view highlights one chunk by slicing the stored document text at the chunk's saved character offsets — chunks overlap, so highlighting every chunk would paint most of the page, and slicing the original avoids both re-running the chunker and string-matching the quote back into the text — rejected rendering the chunk on its own page, which loses the surrounding context that makes a citation checkable.
 
 2026-08-26 — The ask page names the active providers in the footer — with no API key the app answers by extraction, and a reviewer should be able to tell which mode they are looking at without reading container logs — rejected hiding it as an implementation detail.
+
+## Slice 5 — anonymization, the audit table and retention
+
+2026-08-26 — One anonymizer instance per request, created in `askQuestion` and dropped with it — the mapping it accumulates is the only thing that can turn `[PERSON_1]` back into a person, so it exists in memory for one request and is never persisted, logged, or returned to the caller; a shared instance would let one user's names appear in another user's restored answer, which is covered by a test — rejected a module-level singleton.
+
+2026-08-26 — The same instance redacts the question AND every retrieved chunk, so one value gets one placeholder across the whole request — this is what keeps retrieval-context and question agreeing: a question about "Marek Dvořák" still lines up with a chunk about him because both now read `[PERSON_1]`. Per-text anonymizers would have produced different numbers for the same person and quietly broken the model's ability to connect them — rejected redacting each string independently.
+
+2026-08-26 — Retrieval runs on the ORIGINAL text, anonymization happens after — embeddings are computed in-process so nothing leaves to be embedded, and searching redacted text would mean searching for placeholders rather than for what the user asked about; the anonymizer sits at the process boundary, which is the only place it is needed — rejected anonymizing at ingest, which would also have made every stored document permanently lossy.
+
+2026-08-26 — The capitalised-bigram separator is same-line whitespace or a hyphen, never `\s+` — with `\s+` the pattern jumped a blank line and joined a heading to the paragraph below it, redacting "Undervolting\n\nSame" and "Endurance\n\nRated" as people; found by printing what the detector actually matched against the seed corpus rather than by reading the regex, and now pinned by a regression test — rejected `\s+`.
+
+2026-08-26 — Measured on the seed corpus: 6 of 6 people, 6 of 6 e-mails and 3 of 3 phone numbers detected, zero leaks, round trip byte-identical — with 6 false positives ("Arrow Lake", "Curve Optimizer", "Adaptive-Sync", "Ultra High", "Display Stream", "Wi-Fi"), so PERSON precision is 50% and recall on the values that matter is 100%. The bias is deliberate: a false positive means the model reasons over an opaque token and `restore` puts the real text back, so the user is unaffected; a false negative is a leak. Tuned to over-redact, and the number is in the README rather than implied.
+
+2026-08-26 — The phone pattern requires an international prefix or separated 3-3-3/4 grouping — these notes are dense with figures ("3200 MHz", "600 TBW", "100 µs"), and a loose phone regex would have redacted the technical content the answers depend on; there is a test asserting those three figures survive — rejected a permissive digit-run pattern.
+
+2026-08-26 — `restore()` uses `split`/`join`, not a regex — the placeholder contains `[` and `]`, which are regex metacharacters, and hand-escaping them is a bug waiting to be written — rejected building a `RegExp` per placeholder.
+
+2026-08-26 — The `llm_calls` table has no `owner_sub` — the record exists to answer "what did this app spend and how did it behave", not "what did this person ask", and adding the subject would quietly turn a cost-and-latency table into a 30-day behavioural log of every user; §3 enumerates the fields and the table holds exactly that enumeration, so there is nowhere for content to land even by accident — rejected per-user attribution, which is a different feature needing a different justification.
+
+2026-08-26 — A failed audit write is logged at error and swallowed, never propagated — the answer is already computed and correct, and losing one cost record is a smaller harm to the user than turning their question into a 500 — rejected letting the insert fail the request.
+
+2026-08-26 — Failed calls are audited too, with zero tokens and outcome `timeout` or `error` — a call that was made and failed still consumed a deadline and possibly money, and an audit table that only records successes understates both; zero rather than null because the call genuinely returned no usage — rejected auditing only the happy path.
+
+2026-08-26 — The audit record is written to both the table and the structured log — the table is the queryable one and is purged on schedule; the log line is what survives if the database is the thing that broke, which is exactly when you want to know what the app was doing — rejected writing only to the table.
+
+2026-08-26 — `RETENTION_AUDIT_DAYS` accepts zero and fractional values, unlike every other numeric setting here — a retention policy nobody can demonstrate is one nobody believes, and `RETENTION_AUDIT_DAYS=0` makes the purge provable in a single restart; verified by doing it, watching `purged: 2`, and confirming the table was empty — rejected `.int().positive()`, which forbade the only cheap demonstration.
+
+2026-08-26 — The purge logs every run including the ones that delete nothing — "purged 0" is the evidence the job is still alive, and a job that only speaks when it acts is indistinguishable from a job that has silently died — rejected logging only non-empty purges.
+
+2026-08-26 — The retention timer is `unref()`ed — otherwise an hourly interval holds the event loop open and delays container shutdown by up to an hour for a timer nobody is waiting on — rejected a bare `setInterval`.
+
+2026-08-26 — There is no `RETENTION_LOG_DAYS`, and the README says why — §7 implies a purge job for application logs, but this process writes them to stdout and never stores them, so it cannot purge them; inventing the variable would have meant shipping a setting that does nothing. The interpretation is stated rather than guessed silently, per §2 — rejected adding a `logs` table purely to give the variable something to delete.
+
+2026-08-26 — "Delete my account" takes no parameter: the subject comes from the guard — the endpoint therefore cannot be pointed at anyone else's data, and documents cascade to chunks and embeddings through the foreign key rather than through an ordering someone could later get wrong; verified end to end, including that the other user's 10 documents were untouched and that signing back in re-seeds a fresh corpus — rejected accepting a subject in the request body.
+
+2026-08-26 — Deleting the account does not invalidate the session — the token is the IdP's statement about who signed in, which remains true; the client signs out immediately after, and a later sign-in simply creates an empty account — rejected trying to revoke a stateless JWT, which the app cannot do and the IdP owns.
+
+2026-08-26 — The anonymizer is made visible in the UI, showing the question exactly as it was sent alongside the restored answer — §3 requires the round trip be demonstrable, and a privacy control nobody can see is indistinguishable from one that is not running; only counts and the already-redacted text reach the browser, never the mapping — rejected leaving it to the logs.
+
+2026-08-26 — `resolveCitations` was moved into `rag/citations.ts` with no imports at all — the piece most worth testing should not need a database, an embedder or an environment to test, and its input type is declared structurally so `RetrievedChunk` satisfies it without a coupling — rejected leaving it inside `answer.ts`, where a unit test would have pulled in the whole server.
+
+2026-08-26 — Tests run on `node --test` with a 25-line resolver hook in `test/resolve.ts`, and no test dependency at all — Node runs TypeScript directly but knows nothing about the `@/*` alias, and the alternative was reshaping the application's import style to suit the runner, which puts test concerns into production files — rejected adding a test framework, and rejected `allowImportingTsExtensions` across the whole codebase.

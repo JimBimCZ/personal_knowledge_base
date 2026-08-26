@@ -1,5 +1,6 @@
 import type { AnswerInput, AnswerResult, LlmProvider } from "@/server/ai/types";
 import { env } from "@/server/env";
+import { recordLlmCall } from "@/server/log/llmAudit";
 import { logger } from "@/server/log/logger";
 
 /**
@@ -17,8 +18,11 @@ import { logger } from "@/server/log/logger";
  * failure is audited too, with the error's type but not its message, since a
  * provider error can quote the request back at you.
  *
- * Slice 5 persists this record to a table with a 30-day retention. Until then
- * it is a structured log line carrying exactly the same fields.
+ * The record is written twice, on purpose: to the `llm_calls` table, which the
+ * retention job purges after RETENTION_AUDIT_DAYS, and to the structured log,
+ * which the operator's collector retains on its own schedule. The table is the
+ * queryable one; the log line is what survives if the database is the thing
+ * that broke.
  */
 export async function answerWithAudit(
   provider: LlmProvider,
@@ -31,6 +35,15 @@ export async function answerWithAudit(
 
   try {
     const result = await provider.answer(input, signal);
+
+    await recordLlmCall({
+      provider: provider.name,
+      model: provider.model,
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      latencyMs: Date.now() - startedAt,
+      outcome: "ok",
+    });
 
     logger.info(
       {
@@ -47,13 +60,26 @@ export async function answerWithAudit(
 
     return result;
   } catch (error) {
+    const outcome = signal.aborted ? "timeout" : "error";
+
+    await recordLlmCall({
+      provider: provider.name,
+      model: provider.model,
+      // Unknown: the call never returned usage. Recorded as zero rather than
+      // omitted, so a failed call still counts as a call that was made.
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs: Date.now() - startedAt,
+      outcome,
+    });
+
     logger.warn(
       {
         audit: "llm_call",
         provider: provider.name,
         model: provider.model,
         latencyMs: Date.now() - startedAt,
-        outcome: signal.aborted ? "timeout" : "error",
+        outcome,
         // The name of the error class, not its message: a provider error can
         // echo the request, and the request contains the user's own notes.
         errorType: error instanceof Error ? error.name : "unknown",
