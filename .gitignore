@@ -1,0 +1,20 @@
+# Secrets — .env is local only. .env.example is the committed template.
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Local model cache (the image bakes its own copy at build time)
+.models/
+
+# OS noise
+.DS_Store
+
+# The assignment brief is the hiring company's document, and this repo is public.
+# Excluded deliberately — remove this line if you decide it should be published.
+home-assignment-ai-implementation-expert-EN.md
