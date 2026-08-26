@@ -1,12 +1,18 @@
 import { createLocalEmbedder } from "@/server/ai/embedders/local";
 import { createMockEmbedder } from "@/server/ai/embedders/mock";
-import type { EmbeddingProvider } from "@/server/ai/types";
+import { createAnthropicProvider } from "@/server/ai/providers/anthropic";
+import { createGatewayProvider } from "@/server/ai/providers/gateway";
+import { createMockLlmProvider } from "@/server/ai/providers/mock";
+import type { EmbeddingProvider, LlmProvider } from "@/server/ai/types";
 import { env } from "@/server/env";
 
 /**
  * The only place that decides which implementation is in use. Everything else
- * takes the interface. Adding a corporate AI Gateway is a new file here plus an
- * env value — no call site changes.
+ * takes the interface, so adding a provider is a new file plus an env value —
+ * no call site changes anywhere.
+ *
+ * Both are cached for the life of the process: the embedder holds a loaded
+ * model, and the LLM client holds a connection pool.
  */
 let embedder: EmbeddingProvider | null = null;
 
@@ -19,4 +25,19 @@ export function getEmbedder(): EmbeddingProvider {
       : createMockEmbedder();
 
   return embedder;
+}
+
+let llm: LlmProvider | null = null;
+
+export function getLlmProvider(): LlmProvider {
+  if (llm) return llm;
+
+  llm =
+    env.LLM_PROVIDER === "anthropic"
+      ? createAnthropicProvider()
+      : env.LLM_PROVIDER === "gateway"
+        ? createGatewayProvider()
+        : createMockLlmProvider();
+
+  return llm;
 }
