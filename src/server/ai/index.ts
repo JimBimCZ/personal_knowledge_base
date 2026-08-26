@@ -3,6 +3,7 @@ import { createMockEmbedder } from "@/server/ai/embedders/mock";
 import { createAnthropicProvider } from "@/server/ai/providers/anthropic";
 import { createGatewayProvider } from "@/server/ai/providers/gateway";
 import { createMockLlmProvider } from "@/server/ai/providers/mock";
+import { createOpenRouterProvider } from "@/server/ai/providers/openrouter";
 import type { EmbeddingProvider, LlmProvider } from "@/server/ai/types";
 import { env } from "@/server/env";
 
@@ -32,12 +33,19 @@ let llm: LlmProvider | null = null;
 export function getLlmProvider(): LlmProvider {
   if (llm) return llm;
 
-  llm =
-    env.LLM_PROVIDER === "anthropic"
-      ? createAnthropicProvider()
-      : env.LLM_PROVIDER === "gateway"
-        ? createGatewayProvider()
-        : createMockLlmProvider();
+  switch (env.LLM_PROVIDER) {
+    case "anthropic":
+      llm = createAnthropicProvider();
+      break;
+    case "openrouter":
+      llm = createOpenRouterProvider();
+      break;
+    case "gateway":
+      llm = createGatewayProvider();
+      break;
+    default:
+      llm = createMockLlmProvider();
+  }
 
   return llm;
 }
