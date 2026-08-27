@@ -39,20 +39,7 @@ export default async function HomePage() {
               Your documents
             </a>
           </div>
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/" });
-            }}
-          >
-            <button
-              type="submit"
-              className="mt-4 rounded bg-slate-900 px-3 py-1.5 text-sm text-white"
-            >
-              Sign out
-            </button>
-          </form>
-
+          {/* Sign out lives in the header, on every page. */}
           <DeleteAccount
             signOutAction={async () => {
               "use server";
