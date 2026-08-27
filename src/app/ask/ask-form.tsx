@@ -80,7 +80,7 @@ export function AskForm() {
         <button
           type="submit"
           disabled={pending || question.trim().length < 3}
-          className="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-40"
+          className="cursor-pointer rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           {pending ? "Searching…" : "Ask"}
         </button>

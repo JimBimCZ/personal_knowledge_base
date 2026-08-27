@@ -48,7 +48,7 @@ export async function SiteHeader() {
               >
                 <button
                   type="submit"
-                  className="rounded border border-slate-300 px-3 py-1.5 hover:bg-slate-50"
+                  className="cursor-pointer rounded border border-slate-300 px-3 py-1.5 hover:bg-slate-50"
                 >
                   Sign out
                 </button>
@@ -63,7 +63,7 @@ export async function SiteHeader() {
             >
               <button
                 type="submit"
-                className="rounded bg-slate-900 px-3 py-1.5 text-white"
+                className="cursor-pointer rounded bg-slate-900 px-3 py-1.5 text-white"
               >
                 Sign in
               </button>

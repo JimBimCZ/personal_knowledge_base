@@ -56,7 +56,7 @@ export default async function HomePage() {
         >
           <button
             type="submit"
-            className="mt-8 rounded bg-slate-900 px-3 py-1.5 text-sm text-white"
+            className="mt-8 cursor-pointer rounded bg-slate-900 px-3 py-1.5 text-sm text-white"
           >
             Sign in
           </button>
