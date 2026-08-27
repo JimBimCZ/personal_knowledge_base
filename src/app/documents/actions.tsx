@@ -33,7 +33,7 @@ export function DocumentActions({
             router.refresh();
           });
         }}
-        className="shrink-0 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 disabled:opacity-50"
+        className="shrink-0 cursor-pointer rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {pending ? "Deleting…" : "Delete"}
       </button>
@@ -46,7 +46,7 @@ export function DocumentActions({
         type="file"
         accept=".md,.txt,.pdf"
         disabled={pending}
-        className="block w-full text-sm file:mr-3 file:rounded file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-sm file:text-white"
+        className="block w-full cursor-pointer text-sm file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-sm file:text-white"
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (!file) return;

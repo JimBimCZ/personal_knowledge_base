@@ -22,7 +22,7 @@ export function DeleteAccount({ signOutAction }: { signOutAction: () => Promise<
       <button
         type="button"
         onClick={() => setArmed(true)}
-        className="mt-4 text-xs text-slate-500 underline"
+        className="mt-4 cursor-pointer text-xs text-slate-500 underline"
       >
         Delete my account and all my documents
       </button>
@@ -49,7 +49,7 @@ export function DeleteAccount({ signOutAction }: { signOutAction: () => Promise<
               await signOutAction();
             })
           }
-          className="rounded bg-red-700 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+          className="cursor-pointer rounded bg-red-700 px-3 py-1.5 text-xs text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending ? "Deleting…" : "Yes, delete everything"}
         </button>
@@ -57,7 +57,7 @@ export function DeleteAccount({ signOutAction }: { signOutAction: () => Promise<
           type="button"
           disabled={pending}
           onClick={() => setArmed(false)}
-          className="rounded border border-slate-300 px-3 py-1.5 text-xs"
+          className="cursor-pointer rounded border border-slate-300 px-3 py-1.5 text-xs"
         >
           Cancel
         </button>
