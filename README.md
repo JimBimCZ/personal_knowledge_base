@@ -424,8 +424,23 @@ subject comes from the guard — so the endpoint cannot be pointed at anyone els
 
 ## Secrets and data handling
 
-- `.env` is git-ignored; `.env.example` is committed with every variable and a safe
-  placeholder. `git log -p` contains no secrets.
+- `.env` is git-ignored; `.env.example` is committed with every variable. `git log -p`
+  contains no secrets.
+- **The committed values are working local-development credentials, not inert
+  placeholders**, and the file says so at the top. They have to work: `cp .env.example .env
+  && docker compose up` must bring the stack up with no manual step, so a value that needed
+  editing first would break the assignment's central promise. They are safe to commit only
+  because everything they unlock is a container on the reader's own machine. All five are
+  spelled `local-dev-only-change-me-*`, so one `grep` finds anything still at its default,
+  and the header lists what to regenerate before this runs anywhere else.
+- Two of them are **coupled to a second file**, and `.env.example` marks both: the Postgres
+  password is repeated inside `DATABASE_URL`, and `OIDC_CLIENT_SECRET` must match the client
+  secret in `infra/keycloak/realm.json`. Nothing validates either pair, and changing one half
+  produces an error that points at neither line.
+- `AUTH_SECRET` is called out separately because it is not the same kind of secret as the
+  rest. The others gate a local container; that one signs and encrypts the session cookie, so
+  holding it means minting a valid session for any user without ever touching the IdP.
+  Deployed with the committed value, the app would have no authentication at all.
 - **Nothing fake is baked into the image either.** `next build` imports every route module,
   which reaches the environment schema; satisfying it in the Dockerfile would have meant
   putting six placeholder values, one of them named `OIDC_CLIENT_SECRET`, into an image layer
