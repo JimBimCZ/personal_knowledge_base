@@ -33,12 +33,7 @@ export default async function DocumentsPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold">Your documents</h1>
-        <a className="text-sm text-slate-600 underline" href="/ask">
-          Ask your notes
-        </a>
-      </div>
+      <h1 className="text-2xl font-semibold">Your documents</h1>
 
       <p className="mt-2 text-sm text-slate-600">
         {rows.length} document{rows.length === 1 ? "" : "s"}, indexed as{" "}

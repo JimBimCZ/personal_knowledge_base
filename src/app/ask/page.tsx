@@ -13,12 +13,7 @@ export default async function AskPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold">Ask your notes</h1>
-        <a className="text-sm text-slate-600 underline" href="/documents">
-          Your documents
-        </a>
-      </div>
+      <h1 className="text-2xl font-semibold">Ask your notes</h1>
 
       <p className="mt-2 text-sm text-slate-600">
         Answers come only from your own documents, and every answer links to the
